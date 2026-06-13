@@ -10,6 +10,7 @@ Publish to MQTT on loop or archive creation.
 import queue as Queue
 
 import abc
+import copy
 import datetime
 import json
 import logging
@@ -507,9 +508,16 @@ class MQTTPublish(StdService):
                          publish_none_value,
                          append_unit_label,
                          conversion_type,
-                         format_string):
+                         format_string,
+                         yesterday=False,
+                         month=False,
+                         last_month=False,
+                         year=False,
+                         last_year=False):
+
         """ Configure the fields. """
         fields = {}
+        archive_fields = {}
         if fields_dict:
             for field in fields_dict.sections:
                 fields[field] = {}
@@ -522,8 +530,35 @@ class MQTTPublish(StdService):
                 fields[field]['conversion_type'] = field_dict.get('conversion_type', conversion_type)
                 fields[field]['format_string'] = field_dict.get('format_string', format_string)
 
+                archive_fields[field] = copy.deepcopy(fields[field])
+
+                if yesterday:
+                    new_field = "yesterday_" + field
+                    archive_fields[new_field] = copy.deepcopy(fields[field])
+                    archive_fields[new_field]["name"] = new_field
+
+                if month:
+                    new_field = "month_" + field
+                    archive_fields[new_field] = copy.deepcopy(fields[field])
+                    archive_fields[new_field]["name"] = new_field
+
+                if last_month:
+                    new_field = "last_month_" + field
+                    archive_fields[new_field] = copy.deepcopy(fields[field])
+                    archive_fields[new_field]["name"] = new_field
+
+                if year:
+                    new_field = "year_" + field
+                    archive_fields[new_field] = copy.deepcopy(fields[field])
+                    archive_fields[new_field]["name"] = new_field
+
+                if last_year:
+                    new_field = "last_year_" + field
+                    archive_fields[new_field] = copy.deepcopy(fields[field])
+                    archive_fields[new_field]["name"] = new_field
+
         # self.logger.logdbg(f"Configured fields: {fields}.")
-        return fields
+        return fields, archive_fields
 
     def configure_topics(self, service_dict):
         """ Configure the topics. """
@@ -559,15 +594,27 @@ class MQTTPublish(StdService):
             append_unit_label = to_bool(topic_dict.get('append_unit_label', default_append_label))
             conversion_type = topic_dict.get('conversion_type', default_conversion_type)
             format_string = topic_dict.get('format', default_format_string)
+
+            last_year = to_bool(topic_dict.get('last_year', False))
+            year = to_bool(topic_dict.get('year', False))
+            last_month = to_bool(topic_dict.get('last_month', False))
+            month = to_bool(topic_dict.get('month', False))
+            yesterday = to_bool(topic_dict.get('yesterday', False))
+
             fields_dict = topic_dict.get('fields', None)
             fields = {}
             if fields_dict is not None:
-                fields = self.configure_fields(fields_dict,
+                loop_fields, archive_fields = self.configure_fields(fields_dict,
                                                ignore,
                                                publish_none_value,
                                                append_unit_label,
                                                conversion_type,
-                                               format_string)
+                                               format_string,
+                                               yesterday,
+                                               month,
+                                               last_month,
+                                               year,
+                                               last_year)
 
             if 'loop' in binding:
                 if not publish:
@@ -584,7 +631,7 @@ class MQTTPublish(StdService):
                 topics_loop[topic]['append_unit_label'] = append_unit_label
                 topics_loop[topic]['conversion_type'] = conversion_type
                 topics_loop[topic]['format'] = format_string
-                topics_loop[topic]['fields'] = dict(fields)
+                topics_loop[topic]['fields'] = dict(loop_fields)
 
             if 'archive' in binding:
                 if not publish:
@@ -601,7 +648,7 @@ class MQTTPublish(StdService):
                 topics_archive[topic]['append_unit_label'] = append_unit_label
                 topics_archive[topic]['conversion_type'] = conversion_type
                 topics_archive[topic]['format'] = format_string
-                topics_archive[topic]['fields'] = dict(fields)
+                topics_archive[topic]['fields'] = dict(archive_fields)
 
         self.logger.logdbg(f"Loop topics: {topics_loop}")
         self.logger.logdbg(f"Archive topics: {topics_archive}")
