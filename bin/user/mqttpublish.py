@@ -530,7 +530,8 @@ class MQTTPublish(StdService):
                 fields[field]['conversion_type'] = field_dict.get('conversion_type', conversion_type)
                 fields[field]['format_string'] = field_dict.get('format_string', format_string)
 
-                archive_fields[field] = copy.deepcopy(fields[field])
+                if not (yesterday or month or last_month or year or last_year):
+                    archive_fields[field] = copy.deepcopy(fields[field])
 
                 if yesterday:
                     new_field = "yesterday_" + field
