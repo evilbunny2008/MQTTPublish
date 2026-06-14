@@ -243,7 +243,7 @@ class AbstractPublisher(abc.ABC):
             self._reconnect()
         # self.logger.logdbg(f"publishing: {topic} {data}")
         mqtt_message_info = self.client.publish(topic, data, qos=qos, retain=retain)
-        self.logger.logdbg(f"At {int(time.time())} publishing: {int(time_stamp)} {mqtt_message_info.mid} {qos} {topic}")
+        #self.logger.logdbg(f"At {int(time.time())} publishing: {int(time_stamp)} {mqtt_message_info.mid} {qos} {topic}")
 
         self.client.loop(timeout=0.1)
 
@@ -348,7 +348,7 @@ class PublisherV1(AbstractPublisher):
     def on_publish(self, _client, _userdata, mid, reason_codes=None, properties=None):
         time_stamp = "          "
         qos = ""
-        self.logger.logdbg(f"At {int(time.time())} published: {time_stamp} {mid} {qos}")
+        #self.logger.logdbg(f"At {int(time.time())} published: {time_stamp} {mid} {qos}")
 
 class PublisherV2(AbstractPublisher):
     ''' MQTTPublish that communicates with paho mqtt v2. '''
@@ -401,7 +401,7 @@ class PublisherV2(AbstractPublisher):
     def on_publish(self, _client, _userdata, mid, _reason_codes, _properties):
         time_stamp = "          "
         qos = ""
-        self.logger.logdbg(f"At {int(time.time())} published: {time_stamp} {mid} {qos}")
+        #self.logger.logdbg(f"At {int(time.time())} published: {time_stamp} {mid} {qos}")
 
 class PublisherV2MQTT3(PublisherV2):
     ''' MQTTPublish that communicates with paho mqtt v2. '''
@@ -436,8 +436,8 @@ class MQTTPublish(StdService):
 
         exclude_keys = ['password']
         sanitized_service_dict = {k: service_dict[k] for k in set(list(service_dict.keys())) - set(exclude_keys)}
-        self.logger.logdbg(f"sanitized configuration removed {exclude_keys}")
-        self.logger.logdbg(f"sanitized_service_dict is {sanitized_service_dict}")
+        #self.logger.logdbg(f"sanitized configuration removed {exclude_keys}")
+        #self.logger.logdbg(f"sanitized_service_dict is {sanitized_service_dict}")
 
         #  backwards compatability
         if 'PublishWeeWX' in service_dict.sections:
@@ -475,8 +475,8 @@ class MQTTPublish(StdService):
         self.mqtt_config['lwt'] = service_dict.get('lwt')
 
         sanitized_mqtt_config = {k: self.mqtt_config[k] for k in set(list(self.mqtt_config.keys())) - set(exclude_keys)}
-        self.logger.logdbg(f"sanitized mqtt_config removed {exclude_keys}")
-        self.logger.logdbg(f"sanitized_mqtt_config is {sanitized_mqtt_config}")
+        #self.logger.logdbg(f"sanitized mqtt_config removed {exclude_keys}")
+        #self.logger.logdbg(f"sanitized_mqtt_config is {sanitized_mqtt_config}")
 
         self.max_thread_restarts = to_int(service_dict.get('max_thread_restarts', 2))
         # ToDo: change this so it gets reset to zero when the thread is fully up and running (connected) - not as easy as it sounds
@@ -651,8 +651,8 @@ class MQTTPublish(StdService):
                 topics_archive[topic]['format'] = format_string
                 topics_archive[topic]['fields'] = dict(archive_fields)
 
-        self.logger.logdbg(f"Loop topics: {topics_loop}")
-        self.logger.logdbg(f"Archive topics: {topics_archive}")
+        #self.logger.logdbg(f"Loop topics: {topics_loop}")
+        #self.logger.logdbg(f"Archive topics: {topics_archive}")
         return topics_loop, topics_archive
 
     def thread_start(self):
@@ -676,6 +676,9 @@ class MQTTPublish(StdService):
 
     def new_archive_record(self, event):
         """ Handle archive records. """
+
+        #self.logger.loginf(f"event.record: {event.record}")
+
         self._handle_record('archive', event.record)
 
     def _handle_record(self, data_type, data):
