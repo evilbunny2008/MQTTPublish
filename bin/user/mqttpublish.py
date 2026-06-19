@@ -194,6 +194,10 @@ class AbstractPublisher(abc.ABC):
         except AttributeError:
             pass
         try:
+            valid_tls_versions["tlsv13"] = ssl.PROTOCOL_TLSv1_3
+        except AttributeError:
+            pass
+        try:
             valid_tls_versions["sslv2"] = ssl.PROTOCOL_SSLv2
         except AttributeError:
             pass
@@ -509,11 +513,13 @@ class MQTTPublish(StdService):
                          append_unit_label,
                          conversion_type,
                          format_string,
+                         day=False,
                          yesterday=False,
                          month=False,
                          last_month=False,
                          year=False,
-                         last_year=False):
+                         last_year=False,
+                         minmax=None):
 
         """ Configure the fields. """
         fields = {}
@@ -537,33 +543,59 @@ class MQTTPublish(StdService):
                 fields[field]["conversion_type"] = field_dict.get("conversion_type", conversion_type)
                 fields[field]["format_string"] = field_dict.get("format_string", format_string)
 
-                if not (yesterday or month or last_month or year or last_year):
-                    archive_fields[field] = copy.deepcopy(fields[field])
+                day = to_bool(field_dict.get("day", day))
+                yesterday = to_bool(field_dict.get("yesterday", yesterday))
+                month = to_bool(field_dict.get("month", month))
+                last_month = to_bool(field_dict.get("last_month", last_month))
+                year = to_bool(field_dict.get("year", year))
+                last_year = to_bool(field_dict.get("last_year", last_year))
 
-                if yesterday:
-                    new_field = "yesterday_" + field
-                    archive_fields[new_field] = copy.deepcopy(fields[field])
-                    archive_fields[new_field]["name"] = new_field
+                tmp_minmax = field_dict.get("minmax", minmax)
 
-                if month:
-                    new_field = "month_" + field
-                    archive_fields[new_field] = copy.deepcopy(fields[field])
-                    archive_fields[new_field]["name"] = new_field
+                periods = {
+                    "day": day,
+                    "yesterday": yesterday,
+                    "month": month,
+                    "last_month": last_month,
+                    "year": year,
+                    "last_year": last_year,
+                }
 
-                if last_month:
-                    new_field = "last_month_" + field
-                    archive_fields[new_field] = copy.deepcopy(fields[field])
-                    archive_fields[new_field]["name"] = new_field
+                for period, is_active in periods.items():
 
-                if year:
-                    new_field = "year_" + field
-                    archive_fields[new_field] = copy.deepcopy(fields[field])
-                    archive_fields[new_field]["name"] = new_field
+                    new_field = field
+                    if is_active:
+                        new_field = f"{period}_" + field
 
-                if last_year:
-                    new_field = "last_year_" + field
-                    archive_fields[new_field] = copy.deepcopy(fields[field])
-                    archive_fields[new_field]["name"] = new_field
+                    if not (tmp_minmax is None or day or yesterday or month or last_month or year or last_year):
+                        archive_fields[new_field] = copy.deepcopy(fields[field])
+                    else:
+                        if tmp_minmax is None:
+                            archive_fields[new_field] = copy.deepcopy(fields[field])
+                            archive_fields[new_field]["name"] = new_field
+
+                        if tmp_minmax == "sum":
+                            new_field1 = new_field + "_sum"
+                            archive_fields[new_field1] = copy.deepcopy(fields[field])
+                            archive_fields[new_field1]["name"] = new_field1
+
+                        if tmp_minmax in ["min", "both"]:
+                            new_field1 = new_field + "_min"
+                            new_field2 = new_field + "_mintime"
+                            archive_fields[new_field1] = copy.deepcopy(fields[field])
+                            archive_fields[new_field1]["name"] = new_field1
+                            archive_fields[new_field2] = copy.deepcopy(fields[field])
+                            archive_fields[new_field2]["name"] = new_field2
+                            #archive_fields[new_field2]["group"] = "group_time"
+
+                        if tmp_minmax in ["max", "both"]:
+                            new_field1 = new_field + "_max"
+                            new_field2 = new_field + "_maxtime"
+                            archive_fields[new_field1] = copy.deepcopy(fields[field])
+                            archive_fields[new_field1]["name"] = new_field1
+                            archive_fields[new_field2] = copy.deepcopy(fields[field])
+                            archive_fields[new_field2]["name"] = new_field2
+                            #archive_fields[new_field2]["group"] = "group_time"
 
         # self.logger.logdbg(f"Configured fields: {fields}.")
         return fields, archive_fields
@@ -603,11 +635,17 @@ class MQTTPublish(StdService):
             conversion_type = topic_dict.get("conversion_type", default_conversion_type)
             format_string = topic_dict.get("format", default_format_string)
 
+            day = to_bool(topic_dict.get("day", False))
             last_year = to_bool(topic_dict.get("last_year", False))
             year = to_bool(topic_dict.get("year", False))
             last_month = to_bool(topic_dict.get("last_month", False))
             month = to_bool(topic_dict.get("month", False))
             yesterday = to_bool(topic_dict.get("yesterday", False))
+
+            minmax = topic_dict.get("minmax", None)
+
+            if minmax not in ["min", "max", "sum", "both"]:
+                minmax = None
 
             fields_dict = topic_dict.get("fields", None)
             fields = {}
@@ -618,11 +656,13 @@ class MQTTPublish(StdService):
                                                append_unit_label,
                                                conversion_type,
                                                format_string,
+                                               day,
                                                yesterday,
                                                month,
                                                last_month,
                                                year,
-                                               last_year)
+                                               last_year,
+                                               minmax)
 
             if "loop" in binding:
                 if not publish:
@@ -659,7 +699,7 @@ class MQTTPublish(StdService):
                 topics_archive[topic]["fields"] = dict(archive_fields)
 
         #self.logger.logdbg(f"Loop topics: {topics_loop}")
-        #self.logger.logdbg(f"Archive topics: {topics_archive}")
+        self.logger.logdbg(f"Archive topics: {topics_archive}")
         return topics_loop, topics_archive
 
     def thread_start(self):
