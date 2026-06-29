@@ -29,7 +29,7 @@ from weeutil.weeutil import to_bool, to_float, to_int
 import weewx
 from weewx.engine import StdService
 
-VERSION = "1.1.0-rc04b"
+VERSION = "1.0.0"
 
 class CannotConnectError(ConnectionError):
     """ Cannot connect to broker. """
@@ -891,11 +891,26 @@ class PublishWeeWXThread(threading.Thread):
         conversion_type = field_dict.get("conversion_type", topic_dict.get("conversion_type"))
         format_string = field_dict.get("format", topic_dict.get("format"))
         if conversion_type == "integer":
-            formatted_value = to_int(converted_value)
+            if converted_value is not None:
+                formatted_value = to_int(converted_value)
+            else:
+                formatted_value = 0
         elif conversion_type == "float":
-            formatted_value = to_float(converted_value)
+            if converted_value is not None:
+                formatted_value = to_float(converted_value)
+            else:
+                formatted_value = 0
+        elif conversion_type == "ordinal_compass":
+            if converted_value is not None:
+                vh = weewx.units.ValueHelper(converted_value)
+                formatted_value = vh.ordinal_compass()
+            else:
+                formatted_value = "N/A"
         elif conversion_type is not None:
-            formatted_value = format_string % converted_value
+            if converted_value is not None:
+                formatted_value = format_string % converted_value
+            else:
+                formatted_value = ""
         else:
             formatted_value = converted_value
 
