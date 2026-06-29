@@ -29,7 +29,6 @@ from weeutil.weeutil import to_bool, to_float, to_int
 import weewx
 from weewx.engine import StdService
 
-VERSION = "1.0.0"
 
 class CannotConnectError(ConnectionError):
     """ Cannot connect to broker. """
@@ -430,7 +429,11 @@ class MQTTPublish(StdService):
         super().__init__(engine, config_dict)
         self.logger = Logger()
 
-        self.logger.loginf(f"MQTTPublish version: {VERSION}.")
+        self.version = "1.0.0"
+
+        self.process_config_dict(config_dict)
+
+        self.logger.loginf(f"MQTTPublish version: {self.version}.")
 
         service_dict = config_dict.get("MQTTPublish", {})
 
@@ -501,6 +504,22 @@ class MQTTPublish(StdService):
                                           self.topics_archive),
                                           self.data_queue)
         self.thread_start()
+
+
+    def process_config_dict(self, config_dict):
+
+        try:
+            root_dict = weeutil.startup.extract_roots(config_dict)
+            if root_dict is not None:
+                ext_dir = root_dict.get("EXT_DIR", None)
+                if ext_dir is not None:
+                    ext_cache_dir = os.path.join(ext_dir, "MQTTPublish")
+                    _, installer = weecfg.get_extension_installer(ext_cache_dir)
+                    self.version = installer.get("version", "1.0.0")
+
+        except Exception as e:
+            self.logger.logerr(f"Error! Unable to get extension version, e: {str(e)}")
+
 
     def configure_fields(self,
                          fields_dict,
@@ -987,64 +1006,3 @@ class PublishWeeWXThread(threading.Thread):
 
         self.publisher.client.disconnect()
         self.logger.loginf(f"Exited publishing loop {self.name}.")
-
-if __name__ == "__main__":
-    import argparse
-    import os
-
-    def main():  # pragma: no cover
-        """ Run it. """
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
-
-        parser.add_argument("--messages", required=True, type=str, dest="message_file",
-                            help="The file with the test messages")
-
-        parser.add_argument("config_file")
-
-        options = parser.parse_args()
-
-        message_file = options.message_file
-
-        config_path = os.path.abspath(options.config_file)
-        config = configobj.ConfigObj(config_path, file_error=True)
-
-        min_config_dict = {
-            "Station": {
-                "altitude": [0, "foot"],
-                "latitude": 0,
-                "station_type": "Simulator",
-                "longitude": 0
-            },
-            "Simulator": {
-                "driver": "weewx.drivers.simulator",
-            },
-            "Engine": {
-                "Services": {}
-            }
-        }
-        engine = weewx.engine.StdEngine(min_config_dict)
-
-        setup_logging(True, config)
-        mqtt_publish = MQTTPublish(engine, config)
-
-        with open(message_file, encoding="UTF-8") as file_object:
-            packets = json.load(file_object)
-
-        for packet in packets:
-            for key in packet.keys():
-                obs = packet[key]
-                if isinstance(obs, str) and obs.lower() == "none":
-                    packet[key] = None
-            new_loop_packet_event = weewx.Event(weewx.NEW_LOOP_PACKET, packet=packet)
-            engine.dispatchEvent(new_loop_packet_event)
-
-        # Attempt to wait for all packets to be processed
-        # ToDo: Add a max number of time the sleep/loop runs
-        while mqtt_publish._thread.threading_event.is_set():  # pylint: disable=protected-access
-            print("sleepting")
-            time.sleep(1)
-
-        mqtt_publish.shutDown()
-
-    main()
